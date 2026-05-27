@@ -414,7 +414,7 @@ let setupColor='w';
 const RR=i=>i>>3,CC=i=>i&7,SQ=(r,c)=>r*8+c;
 const PC=p=>p?p[0]:null,PT=p=>p?p[1]:null,OPP=c=>c==='w'?'b':'w';
 const DIFF_ELO={1:800,2:1200,3:1600,4:2000};
-const DIFF_DEPTH={1:1,2:2,3:3,4:4};
+const DIFF_DEPTH={1:2,2:3,3:4,4:5};
 const DIFF_LABEL={1:'Easy',2:'Medium',3:'Hard',4:'Expert'};
 
 // ================================================================
@@ -521,7 +521,9 @@ function startTimers(){
   updateTimerDisplay();
   timerInterval=setInterval(function(){
     if(gameOver)return;
-    if(turn===humanColor)humanTime--;else aiTime--;
+    // AI timer keeps running even while aiThinking — AI clock never pauses
+    if(turn===humanColor && !aiThinking)humanTime--;
+    else if(turn!==humanColor)aiTime--;
     updateTimerDisplay();
     if(humanTime<=0)endByTime('ai');
     else if(aiTime<=0)endByTime('human');
@@ -811,11 +813,14 @@ function evaluate(b){
   return s+(wM-bM)*5;
 }
 function quiesce(b,cas,ep,alpha,beta,maxing,depth){
+  var color=maxing?'w':'b';
+  var allM=allLegal(color,b,cas,ep);
+  // Detect checkmate/stalemate in quiescence too
+  if(!allM.length){return kingInCheck(color,b,cas,ep)?(maxing?-9999999:9999999):0;}
   var sp=evaluate(b);if(depth<=0)return sp;
   if(maxing){if(sp>=beta)return beta;if(sp>alpha)alpha=sp;}
   else{if(sp<=alpha)return alpha;if(sp<beta)beta=sp;}
-  var color=maxing?'w':'b';
-  var caps=allLegal(color,b,cas,ep).filter(function(m){return b[m[1]]&&PC(b[m[1]])!==color;});
+  var caps=allM.filter(function(m){return b[m[1]]&&PC(b[m[1]])!==color;});
   if(!caps.length)return sp;
   for(var i=0;i<caps.length;i++){
     var s=simMove(caps[i][0],caps[i][1],b,cas,ep);
@@ -847,6 +852,7 @@ function scheduleAI(){
   if(gameOver||aiThinking)return;
   aiThinking=true;
   document.getElementById('st').textContent='AI thinking...';
+  updateTimerDisplay(); // show AI timer is active immediately
   setTimeout(function(){
     try{TT.clear();doAIMove();}catch(e){console.error(e);}
     aiThinking=false;if(!gameOver)renderAll();
